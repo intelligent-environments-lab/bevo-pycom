@@ -3,7 +3,8 @@
 # class methods:
 # - start()
 # - stop()
-# 
+# - get_packed_msg()
+#
 # start() should be run from a separate thread so that stop() can update exit flag
 
 from machine import I2C
@@ -77,6 +78,14 @@ class sps30:
         self._i2c.writeto(SPS30_I2C_ID, SPS30_STOP_ADDR)
         self._i2c.deinit()
         self._exit_flag = True
+
+    # Serialize data for transmission
+    # Call from main thread
+    # Payload size: 80 bytes
+    def get_packed_msg(self):
+        return struct.pack('<ffffffffff', _curr_data[0], _curr_data[1], _curr_data[2],
+                _curr_data[3], _curr_data[4], _curr_data[5], _curr_data[6], _curr_data[7],
+                _curr_data[8], _curr_data[9])
 
     def _send_start(self):
 

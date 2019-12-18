@@ -3,6 +3,7 @@
 # class methods:
 # - start()
 # - stop()
+# - get_packed_msg()
 #
 # start() should be run from a separate thread so that stop() can update exit flag
 
@@ -77,6 +78,12 @@ class scd30:
         self._i2c.writeto(SCD30_I2C_ID, SCD30_STOP_ADDR)
         self._i2c.deinit()
         self._exit_flag = True
+
+    # Serialize data for transmission
+    # Call from main thread
+    # Payload size: 24 bytes
+    def get_packed_msg(self):
+        return struct.pack('<fff', self._curr_data[0], self._curr_data[1], self.curr_data[2])
 
     def _send_start(self):
 
