@@ -21,13 +21,14 @@ SPS30_START_ADDR    = b'\x00\x10'
 SPS30_READY_ADDR    = b'\x02\x02'
 SPS30_READ_ADDR     = b'\x03\x00'
 SPS30_STOP_ADDR     = b'\x01\x04'
+SPS30_RESET_ADDR    = b'\xD3\x04'
 
 # SPS I2C COMMAND OPTIONS
 SPS30_START_MEASUREMENT = b'\x03\x00'
 
 # SPS30_1 PINS
-SPS30_1_SDA = 'P10'
-SPS30_1_SCL = 'P11'
+SPS30_SDA = 'P10'
+SPS30_SCL = 'P11'
 
 class sps30:
 
@@ -37,11 +38,14 @@ class sps30:
 
     _exit_flag = False
 
-    def __init__(self, b=1, p=(SPS30_1_SDA, SPS30_1_SCL), br=20000, interval=10):
+    def __init__(self, b=1, p=(SPS30_SDA, SPS30_SCL), br=20000, interval=10):
 
         self._interval = interval
         self._i2c = I2C(b, pins=p, baudrate=br)
-        assert SPS30_I2C_ID in self._i2c.scan(), "SPS30 not connected."
+        #assert SPS30_I2C_ID in self._i2c.scan(), "SPS30 not connected."
+        while SPS30_I2C_ID not in self._i2c.scan():
+            print("SPS30 not connected.")
+            time.sleep(3)
 
         self._send_start()
 
@@ -51,26 +55,35 @@ class sps30:
         # Main operating loop
         while not self._exit_flag:
 
-            # Polls until ready
-            while not(self._is_ready()):
-                time.sleep(0.1)
+            try:
 
-            # Sample sps30
-            read = self._read_data()
+                # Polls until ready
+                while not(self._is_ready()):
+                    time.sleep(0.1)
 
-            # Check crc8 and deserialize
-            for i in range(0, 10):
+                # Sample sps30
+                read = self._read_data()
 
-                # crc8 check
-                assert calc_crc8(read[i * 6 : i * 6 + 2]) == bytes([read[i * 6 + 2]]), "Bad upper crc8"
-                assert calc_crc8(read[i * 6 + 3: i * 6 + 5]) == bytes([read[i * 6 + 5]]), "Bad lower crc8"
+                # Check crc8 and deserialize
+                for i in range(0, 10):
 
-                # Deserialize
-                float_struct = struct.pack('>BBBB', read[i * 6], read[i * 6 + 1], read[i * 6 + 3], read[i * 6 + 4])
-                self._curr_data.append(struct.unpack('>f', float_struct)[0])
+                    # crc8 check
+                    assert calc_crc8(read[i * 6 : i * 6 + 2]) == bytes([read[i * 6 + 2]]), "Bad upper crc8"
+                    assert calc_crc8(read[i * 6 + 3: i * 6 + 5]) == bytes([read[i * 6 + 5]]), "Bad lower crc8"
 
-            # Sleep timer
-            time.sleep(self._interval)
+                    # Deserialize
+                    float_struct = struct.pack('>BBBB', read[i * 6], read[i * 6 + 1], read[i * 6 + 3], read[i * 6 + 4])
+                    self._curr_data.append(struct.unpack('>f', float_struct)[0])
+
+                # Sleep timer
+                time.sleep(self._interval)
+
+            except Exception as e:
+                # Reset sensor in case I2C Bus fail, bad crc8, whatever
+                print(e)
+                self._reset()
+                time.sleep(3)
+
 
     # Called in a separate thread
     def stop(self):
@@ -81,11 +94,11 @@ class sps30:
 
     # Serialize data for transmission
     # Call from main thread
-    # Payload size: 80 bytes
+    # Payload size: 40 bytes
     def get_packed_msg(self):
-        return struct.pack('<ffffffffff', _curr_data[0], _curr_data[1], _curr_data[2],
-                _curr_data[3], _curr_data[4], _curr_data[5], _curr_data[6], _curr_data[7],
-                _curr_data[8], _curr_data[9])
+        return struct.pack('<ffffffffff', self._curr_data[0], self._curr_data[1],self. _curr_data[2],
+                self._curr_data[3], self._curr_data[4], self._curr_data[5], self._curr_data[6], self._curr_data[7],
+                self._curr_data[8], self._curr_data[9])
 
     def _send_start(self):
 
@@ -105,6 +118,11 @@ class sps30:
         # Returns read data
         self._i2c.writeto(SPS30_I2C_ID, SPS30_READ_ADDR)
         return self._i2c.readfrom(SPS30_I2C_ID, 60)
+
+    def _reset(self):
+
+        # Resets sensor
+        self._i2c.writeto(SPS30_I2C_ID, SPS30_RESET_ADDR)
 
     # DEBUGGING ONLY, SHOULD LOG DATA
     def _print(self):
