@@ -45,7 +45,7 @@ class scd30:
         #assert SCD30_I2C_ID in self._i2c.scan(), "SCD30 not connected."
         while SCD30_I2C_ID not in self._i2c.scan():
             print("SCD30 not connected.")
-            sleep(3)
+            time.sleep(3)
 
         self._send_start()
 
