@@ -15,9 +15,10 @@
    
 ### Completed:
 
-* SPS30 I2C Driver
-* SCD30 I2C Driver
+* SPS30 I2C driver
+* SCD30 I2C driver
 * LoRa publishing code
+* Pysense sensors (temp, humidity, lux)
 
 
 SPS30 datasheet: [link](https://cdn.sparkfun.com/assets/2/d/2/a/6/Sensirion_SPS30_Particulate_Matter_Sensor_v0.9_D1__1_.pdf)
