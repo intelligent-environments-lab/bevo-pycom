@@ -3,6 +3,7 @@ import time
 import ubinascii
 import socket
 import struct
+import pycom
 from network import LoRa
 from sps30 import sps30
 from scd30 import scd30
@@ -29,6 +30,8 @@ if using_pysense_sensor:
     from MPL3115A2 import MPL3115A2,ALTITUDE,PRESSURE
 
 def main():
+
+    pycom.heartbeat(False)
 
     # Sensor initializations with default params
     # bus   = 1
@@ -137,9 +140,23 @@ def lora_cb(lora):
     sending lora packet over a specific port
 '''
 def send_pkt(lora_socket, pkt, port):
+    # LED while transmitting
+    # SPS30: lime
+    # SCD30: teal
+    # Pysense: fuchsia
+    if port == 8:
+        pycom.rgbled(0x00FF00)
+    if port == 9:
+        pycom.rgbled(0x00FFFF)
+    if port == 10:
+        pycom.rgbled(0xFF00FF)
+
     lora_socket.bind(port)
     lora_socket.send(pkt)
     time.sleep(5) # timer probably necessary.. idk how long tho
+
+    # turn off LED
+    pycom.rgbled(0)
 
 if __name__ == "__main__":
     try:
