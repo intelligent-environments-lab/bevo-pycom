@@ -2,6 +2,7 @@ import _thread
 import time
 import ubinascii
 import socket
+import struct
 from network import LoRa
 from sps30 import sps30
 from scd30 import scd30
@@ -17,7 +18,15 @@ LORA_DR = 3
 
 # Sensor flags
 using_pm = False
-using_co2 = True
+using_co2 = False
+using_pysense_sensor = True
+
+if using_pysense_sensor:
+    from pysense import Pysense
+    from LIS2HH12 import LIS2HH12
+    from SI7006A20 import SI7006A20
+    from LTR329ALS01 import LTR329ALS01
+    from MPL3115A2 import MPL3115A2,ALTITUDE,PRESSURE
 
 def main():
 
@@ -26,7 +35,7 @@ def main():
     # sda   = P10
     # scl   = P11
     # baud  = 20000
-    # inter = 10
+    # interval  = 10
     pm_sensor = sps30() if using_pm else None
     co2_sensor = scd30() if using_co2 else None
 
@@ -34,10 +43,7 @@ def main():
     pm_thread = _thread.start_new_thread(pm_sensor.start, ()) if using_pm else None
     co2_thread = _thread.start_new_thread(co2_sensor.start, ()) if using_co2 else None
 
-    # DEBUGGING
-    #print("Sensors running for 5 seconds")
-    #time.sleep(5)
-
+    # Prepare LoRa channels
     lora = LoRa(mode=LoRa.LORAWAN, region=LoRa.US915, device_class=LoRa.CLASS_C)
     prepare_channels(lora, LORA_FREQUENCY, LORA_DR)
     # Join LoRa network with OTAA
@@ -65,15 +71,35 @@ def main():
 
     # Send pm (payload=40bytes) and co2 (payload=12bytes) data every 5 minutes
     while True:
-        pm_data = pm_sensor.get_packed_msg() if using_pm else None
-        co2_data = co2_sensor.get_packed_msg() if using_co2 else None
 
+        # Poll data
+        if using_pm:
+            pm_data = pm_sensor.get_packed_msg()
+        if using_co2:
+            co2_data = co2_sensor.get_packed_msg()
+        if using_pysense_sensor:
+            py = Pysense()
+            mp = MPL3115A2(py,mode=ALTITUDE) # Returns height in meters. Mode may also be set to PRESSURE, returning a value in Pascals
+            si = SI7006A20(py)
+            lt = LTR329ALS01(py)
+            li = LIS2HH12(py)
+
+        # Send data
         if using_pm:
             send_pkt(lora_socket,pm_data, 8)
         if using_co2:
             send_pkt(lora_socket, co2_data, 9)
+        if using_pysense_sensor:
 
-        time.sleep(300 - using_pm * 5 - using_co2 * 5)
+            temp = si.temperature()
+            rh = si.humidity()
+            rlux = lt.light()[0]
+            blux = lt.light()[1]
+
+            pysense_pkt = struct.pack('<ffii', temp, rh, rlux, blux)
+            send_pkt(lora_socket, pysense_pkt, 10)
+
+        time.sleep(300 - using_pm * 5 - using_co2 * 5 - using_pysense_sensor * 5)
 
     # Stop polling and end threads
     if using_pm:

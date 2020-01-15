@@ -34,7 +34,7 @@ class sps30:
 
     _i2c = None
     _interval = None
-    _curr_data = []
+    _curr_data = [None] * 10
 
     _exit_flag = False
 
@@ -73,7 +73,7 @@ class sps30:
 
                     # Deserialize
                     float_struct = struct.pack('>BBBB', read[i * 6], read[i * 6 + 1], read[i * 6 + 3], read[i * 6 + 4])
-                    self._curr_data.append(struct.unpack('>f', float_struct)[0])
+                    self._curr_data[i] = struct.unpack('>f', float_struct)[0]
 
                 # Sleep timer
                 time.sleep(self._interval)
