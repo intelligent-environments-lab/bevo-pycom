@@ -15,7 +15,7 @@ nwk_key = ubinascii.unhexlify('ADFCEABE7B6F8AFFCA503ABC0310C871')
 
 # TTN params (2nd subband)
 LORA_FREQUENCY = 903900000
-LORA_DR = 3
+LORA_DR = 1
 
 # Sensor flags
 using_pm = False
@@ -48,9 +48,10 @@ def main():
 
     # Prepare LoRa channels
     lora = LoRa(mode=LoRa.LORAWAN, region=LoRa.US915, device_class=LoRa.CLASS_C)
-    prepare_channels(lora, LORA_FREQUENCY, LORA_DR)
+    prepare_channels(lora, LORA_FREQUENCY)
+    #lora = LoRa(mode=LoRa.LORA, region=LoRa.US915, frequency=904600000, bandwidth=LoRa.BW_500KHZ, sf=8)
     # Join LoRa network with OTAA
-    lora.join(activation=LoRa.OTAA, auth=(dev_eui, app_key, nwk_key), timeout=0, dr=0) # US915 always joins at DR0 ??
+    lora.join(activation=LoRa.OTAA, auth=(dev_eui, app_key, nwk_key), timeout=0, dr=0)
     # wait until the module has joined the network
     print('Over the air network activation ... ', end='')
     while not lora.has_joined():
@@ -62,7 +63,7 @@ def main():
     lora_socket = socket.socket(socket.AF_LORA, socket.SOCK_RAW)
     lora_socket.setsockopt(socket.SOL_LORA, socket.SO_DR, LORA_DR)
     # msg are confirmed at the FMS level
-    lora_socket.setsockopt(socket.SOL_LORA, socket.SO_CONFIRMED, 0)
+    lora_socket.setsockopt(socket.SOL_LORA, socket.SO_CONFIRMED, False)
     # make the socket non blocking by default
     lora_socket.setblocking(False)
 
@@ -74,7 +75,6 @@ def main():
 
     # Send pm (payload=40bytes) and co2 (payload=12bytes) data every 5 minutes
     while True:
-
         # Poll data
         if using_pm:
             pm_data = pm_sensor.get_packed_msg()
@@ -102,7 +102,7 @@ def main():
             pysense_pkt = struct.pack('<ffii', temp, rh, rlux, blux)
             send_pkt(lora_socket, pysense_pkt, 10)
 
-        time.sleep(300 - using_pm * 5 - using_co2 * 5 - using_pysense_sensor * 5)
+        time.sleep(15 - using_pm * 5 - using_co2 * 5 - using_pysense_sensor * 5)
 
     # Stop polling and end threads
     if using_pm:
@@ -114,14 +114,20 @@ def main():
     utility function to setup the lora channels
     completely rewritten from example code for TTN
 '''
-def prepare_channels(lora, base_freq, dr):
-    for index in range(0, 71):
+def prepare_channels(lora, base_freq):
+
+    # Technically there are only channels 0-71 but seems like lora library is bugged and channel 72 exists @ 914.2 MHz
+    for index in range(0, 72):
         lora.remove_channel(index)
 
     for i in range(0, 8):
         fq = base_freq + (i * 200000)
-        lora.add_channel(i + 8, frequency=fq, dr_min=0, dr_max=dr)
+        lora.add_channel(i + 8, frequency=fq, dr_min=0, dr_max=3)
         print("US915 Adding channel up %s %s" % (i + 8, fq))
+
+    if (LORA_DR == 4):
+        lora.add_channel(65, frequency=904600000, dr_min=0, dr_max=4)
+        print("US915 Adding channel up 65 904600000")
 
 '''
     call back for handling RX packets
@@ -135,6 +141,8 @@ def lora_cb(lora):
     if events & LoRa.TX_PACKET_EVENT:
         #print("tx_time_on_air: {} ms @ dr {}".format(lora.stats().tx_time_on_air, lora.stats().sftx))
         print("Frequency transmitted: {}".format(lora.stats().tx_frequency))
+    if events & LoRa.TX_FAILED_EVENT:
+        print("Failed to send packet")
 
 '''
     sending lora packet over a specific port
